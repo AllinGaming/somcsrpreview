@@ -1,0 +1,13 @@
+# root
+.DS_Store
+Thumbs.db
+
+# Vite build output
+csr-preview/dist
+
+# dependencies
+csr-preview/node_modules
+
+# misc
+*.log
+
