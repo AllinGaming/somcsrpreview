@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-const SHEET_ID = "1nyc58X5guTYyBtFLqAbCK8SpcoXemJpUqpoIkLTVTYM";
+const SHEET_ID = "1-9jt6ofXzOICrUGsw509xeystkNIc2YCgPyB6V2tCjU";
 const SHEETS = [
   { name: "Kara40 CSR", gid: null },
   { name: "NAXX CSR", gid: null },
-  { name: "AQ40 CSR", gid: null },
+  { name: "AQ CSR", gid: null },
   { name: "ES CSR", gid: null },
   { name: "BWL CSR", gid: null },
   { name: "MC CSR", gid: null },
 ];
 
-const COL_INDEX = { item: 1, name: 2, value: 3 };
+const COL_INDEX = { item: 10, name: 11, value: 12 };
 
 function parseCSV(text) {
   const rows = [];
@@ -98,7 +98,10 @@ async function fetchCsvWithFallback(sheet) {
 }
 
 function isRowEmpty(cells) {
-  return cells.every((cell) => cell.trim() === "");
+  const item = (cells[COL_INDEX.item] ?? "").trim();
+  const name = (cells[COL_INDEX.name] ?? "").trim();
+  const value = (cells[COL_INDEX.value] ?? "").trim();
+  return item === "" && name === "" && value === "";
 }
 
 function filterRows(rows, query) {
@@ -166,7 +169,7 @@ export default function App() {
             cells,
             rowNumber: rowIndex + 1,
           }))
-          .filter((row) => row.rowNumber > 8)
+          .filter((row) => row.rowNumber > 1)
           .filter((row) => !isRowEmpty(row.cells));
         if (!cancelled) {
           setSheets((prev) =>
