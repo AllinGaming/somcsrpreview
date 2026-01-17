@@ -11,7 +11,7 @@ const SHEETS = [
   { name: "MC CSR", gid: null },
 ];
 
-const COL_INDEX = { item: 10, name: 11, value: 12 };
+const COL_INDEX = { item: 19, name: 20, value: 21 };
 const DEFAULT_FILTERS = { query: "" };
 
 function parseCSV(text) {
