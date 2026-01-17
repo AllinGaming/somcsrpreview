@@ -185,9 +185,13 @@ function writeFiltersToUrl(filters) {
 export default function App() {
   const [activeSheet, setActiveSheet] = useState(SHEETS[0].name);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [showSearch, setShowSearch] = useState(false);
   const [sort, setSort] = useState({ key: "csr", dir: "desc" });
   const [copyStatus, setCopyStatus] = useState("Copy sheet");
   const firstRender = useRef(true);
+  const sheetNavRef = useRef(null);
+  const [statusHidden, setStatusHidden] = useState(false);
+  const hideStatusTimeout = useRef(null);
 
   const [sheets, setSheets] = useState(
     SHEETS.map((sheet) => ({
@@ -261,6 +265,31 @@ export default function App() {
   }, [filters]);
 
   useEffect(() => {
+    if (filters.query && !showSearch) {
+      setShowSearch(true);
+    }
+  }, [filters.query, showSearch]);
+
+  useEffect(() => {
+    const nav = sheetNavRef.current;
+    if (!nav) return undefined;
+
+    function handleWheel(event) {
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+        return;
+      }
+      if (nav.scrollWidth <= nav.clientWidth) {
+        return;
+      }
+      event.preventDefault();
+      nav.scrollLeft += event.deltaY;
+    }
+
+    nav.addEventListener("wheel", handleWheel, { passive: false });
+    return () => nav.removeEventListener("wheel", handleWheel);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadSheet(sheet, index) {
@@ -325,13 +354,9 @@ export default function App() {
     };
   }, []);
 
-  const statusInfo = useMemo(() => {
+  const isReady = useMemo(() => {
     const loaded = sheets.filter((sheet) => sheet.status === "ready").length;
-    const isReady = loaded === sheets.length;
-    return {
-      isReady,
-      text: isReady ? "Synced" : "Syncing",
-    };
+    return loaded === sheets.length;
   }, [sheets]);
 
   const active = sheets.find((sheet) => sheet.name === activeSheet) ?? sheets[0];
@@ -354,6 +379,11 @@ export default function App() {
 
   function clearFilters() {
     setFilters(DEFAULT_FILTERS);
+    setShowSearch(false);
+  }
+
+  function openSearch() {
+    setShowSearch(true);
   }
 
   function toggleSort(key) {
@@ -397,14 +427,32 @@ export default function App() {
     return undefined;
   }, [copyStatus]);
 
-  const activeMeta = active?.updatedAt
-    ? `${active.rows.length} Items \u2022 Last updated ${active.updatedAt.toLocaleTimeString()}`
-    : `${active?.rows.length ?? 0} Items`;
+  useEffect(() => {
+    if (hideStatusTimeout.current) {
+      clearTimeout(hideStatusTimeout.current);
+      hideStatusTimeout.current = null;
+    }
+    if (!isReady) {
+      setStatusHidden(false);
+      return undefined;
+    }
+    setStatusHidden(false);
+    hideStatusTimeout.current = setTimeout(() => {
+      setStatusHidden(true);
+      hideStatusTimeout.current = null;
+    }, 5000);
+    return () => {
+      if (hideStatusTimeout.current) {
+        clearTimeout(hideStatusTimeout.current);
+        hideStatusTimeout.current = null;
+      }
+    };
+  }, [isReady]);
 
   return (
     <div className="app">
       <section className="top-bar">
-        <nav className="sheet-nav">
+        <nav className="sheet-nav" ref={sheetNavRef}>
           {SHEETS.map((sheet) => {
             const count =
               sheets.find((entry) => entry.name === sheet.name)?.rows.length ??
@@ -420,9 +468,15 @@ export default function App() {
             );
           })}
         </nav>
-        <div className={`status ${statusInfo.isReady ? "status--ready" : ""}`}>
+        <div
+          className={`status ${isReady ? "status--ready" : ""} ${
+            statusHidden ? "status--hidden" : ""
+          }`}
+          role="status"
+          aria-label={isReady ? "Synced" : "Syncing"}
+          aria-hidden={statusHidden}
+        >
           <span className="status-dot" aria-hidden />
-          <span>{statusInfo.text}</span>
         </div>
       </section>
 
@@ -433,10 +487,38 @@ export default function App() {
               <div className="module-title">
                 <div>
                   <h2>{active.name}</h2>
-                  <p className="module-meta">{activeMeta}</p>
                 </div>
               </div>
               <div className="module-actions">
+                <div
+                  className={`filter-bar ${
+                    showSearch ? "filter-bar--open" : "filter-bar--closed"
+                  }`}
+                >
+                  {showSearch ? (
+                    <>
+                      <label className="filter-field">
+                        <span>Search</span>
+                        <input
+                          type="search"
+                          value={filters.query}
+                          onChange={(event) =>
+                            updateFilter("query", event.target.value)
+                          }
+                          placeholder="Item or player"
+                          autoFocus
+                        />
+                      </label>
+                      <button className="btn ghost small" onClick={clearFilters}>
+                        Clear
+                      </button>
+                    </>
+                  ) : (
+                    <button className="btn ghost small" onClick={openSearch}>
+                      Search
+                    </button>
+                  )}
+                </div>
                 <button className="btn primary" onClick={copySheet}>
                   {copyStatus}
                 </button>
@@ -465,23 +547,6 @@ export default function App() {
 
               {active.status === "ready" && (
                 <>
-                  <div className="filter-bar">
-                    <label>
-                      Search
-                      <input
-                        type="search"
-                        value={filters.query}
-                        onChange={(event) =>
-                          updateFilter("query", event.target.value)
-                        }
-                        placeholder="Item or player name"
-                      />
-                    </label>
-                    <button className="btn ghost" onClick={clearFilters}>
-                      Clear
-                    </button>
-                  </div>
-
                   <div className="table-wrap">
                     <table>
                       <thead>
