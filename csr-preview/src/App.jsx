@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
 const SHEET_ID = "1-9jt6ofXzOICrUGsw509xeystkNIc2YCgPyB6V2tCjU";
@@ -12,6 +12,7 @@ const SHEETS = [
 ];
 
 const COL_INDEX = { item: 10, name: 11, value: 12 };
+const DEFAULT_FILTERS = { query: "" };
 
 function parseCSV(text) {
   const rows = [];
@@ -97,26 +98,97 @@ async function fetchCsvWithFallback(sheet) {
   throw lastError || new Error("Fetch failed");
 }
 
-function isRowEmpty(cells) {
-  const item = (cells[COL_INDEX.item] ?? "").trim();
-  const name = (cells[COL_INDEX.name] ?? "").trim();
-  const value = (cells[COL_INDEX.value] ?? "").trim();
-  return item === "" && name === "" && value === "";
+function parseCsr(value) {
+  if (!value) {
+    return null;
+  }
+  const cleaned = value.replace(/[^0-9.-]/g, "");
+  if (!cleaned) {
+    return null;
+  }
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-function filterRows(rows, query) {
+function csrTier(value) {
+  if (value == null) {
+    return { label: "No score", className: "empty" };
+  }
+  if (value >= 75) {
+    return { label: "High", className: "gold" };
+  }
+  if (value >= 50) {
+    return { label: "Medium", className: "green" };
+  }
+  if (value >= 25) {
+    return { label: "Low", className: "stone" };
+  }
+  return { label: "Very low", className: "ash" };
+}
+
+function applyFilters(rows, filters) {
+  const query = filters.query.trim().toLowerCase();
   if (!query) {
     return rows;
   }
-  const needle = query.toLowerCase();
-  return rows.filter((row) =>
-    row.cells.some((cell) => cell.toLowerCase().includes(needle))
+  return rows.filter(
+    (row) =>
+      row.item.toLowerCase().includes(query) ||
+      row.name.toLowerCase().includes(query)
   );
 }
 
+function sortRows(rows, sort) {
+  const sorted = [...rows];
+  sorted.sort((a, b) => {
+    if (sort.key === "csr") {
+      const left = a.csrNumber ?? -Infinity;
+      const right = b.csrNumber ?? -Infinity;
+      return sort.dir === "asc" ? left - right : right - left;
+    }
+    if (sort.key === "item") {
+      return sort.dir === "asc"
+        ? a.item.localeCompare(b.item)
+        : b.item.localeCompare(a.item);
+    }
+    return sort.dir === "asc"
+      ? a.name.localeCompare(b.name)
+      : b.name.localeCompare(a.name);
+  });
+  return sorted;
+}
+
+function buildCopyText(rows) {
+  return rows
+    .map((row) => `${row.item}\t${row.name}\t${row.value}`)
+    .join("\n");
+}
+
+function readFiltersFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    query: params.get("q") ?? "",
+  };
+}
+
+function writeFiltersToUrl(filters) {
+  const params = new URLSearchParams();
+  if (filters.query) params.set("q", filters.query);
+
+  const search = params.toString();
+  const nextUrl = `${window.location.pathname}${
+    search ? `?${search}` : ""
+  }${window.location.hash}`;
+  window.history.replaceState(null, "", nextUrl);
+}
+
 export default function App() {
-  const [filterQuery, setFilterQuery] = useState("");
   const [activeSheet, setActiveSheet] = useState(SHEETS[0].name);
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [sort, setSort] = useState({ key: "csr", dir: "desc" });
+  const [copyStatus, setCopyStatus] = useState("Copy sheet");
+  const firstRender = useRef(true);
+
   const [sheets, setSheets] = useState(
     SHEETS.map((sheet) => ({
       ...sheet,
@@ -124,6 +196,7 @@ export default function App() {
       rows: [],
       sourceUrl: "",
       error: null,
+      updatedAt: null,
     }))
   );
 
@@ -158,6 +231,36 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const urlFilters = readFiltersFromUrl();
+    const hasUrlFilters = Object.values(urlFilters).some((value) => value);
+    if (hasUrlFilters) {
+      setFilters(urlFilters);
+      return;
+    }
+    try {
+      const saved = localStorage.getItem("csrFilters");
+      if (saved) {
+        setFilters({ ...DEFAULT_FILTERS, ...JSON.parse(saved) });
+      }
+    } catch {
+      setFilters(DEFAULT_FILTERS);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem("csrFilters", JSON.stringify(filters));
+    } catch {
+      // ignore storage errors
+    }
+    writeFiltersToUrl(filters);
+  }, [filters]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadSheet(sheet, index) {
@@ -165,12 +268,21 @@ export default function App() {
         const { text, url } = await fetchCsvWithFallback(sheet);
         const rawRows = parseCSV(text).map(sanitizeRow);
         const rows = rawRows
-          .map((cells, rowIndex) => ({
-            cells,
-            rowNumber: rowIndex + 1,
-          }))
+          .map((cells, rowIndex) => {
+            const item = (cells[COL_INDEX.item] ?? "").trim();
+            const name = (cells[COL_INDEX.name] ?? "").trim();
+            const value = (cells[COL_INDEX.value] ?? "").trim();
+            return {
+              cells,
+              rowNumber: rowIndex + 1,
+              item,
+              name,
+              value,
+              csrNumber: parseCsr(value),
+            };
+          })
           .filter((row) => row.rowNumber > 1)
-          .filter((row) => !isRowEmpty(row.cells));
+          .filter((row) => row.item || row.name || row.value);
         if (!cancelled) {
           setSheets((prev) =>
             prev.map((entry, i) =>
@@ -181,6 +293,7 @@ export default function App() {
                     rows,
                     sourceUrl: url,
                     error: null,
+                    updatedAt: new Date(),
                   }
                 : entry
             )
@@ -212,101 +325,258 @@ export default function App() {
     };
   }, []);
 
-  const statusText = useMemo(() => {
+  const statusInfo = useMemo(() => {
     const loaded = sheets.filter((sheet) => sheet.status === "ready").length;
-    if (loaded === sheets.length) {
-      return "Loaded all sheets";
-    }
-    return `Loading ${loaded}/${sheets.length} sheets...`;
+    const isReady = loaded === sheets.length;
+    return {
+      isReady,
+      text: isReady ? "Synced" : "Syncing",
+    };
   }, [sheets]);
 
   const active = sheets.find((sheet) => sheet.name === activeSheet) ?? sheets[0];
-  const filteredRows = active ? filterRows(active.rows, filterQuery.trim()) : [];
+
+  const filteredRows = useMemo(() => {
+    if (!active) {
+      return [];
+    }
+    return applyFilters(active.rows, filters);
+  }, [active, filters]);
+
+  const sortedRows = useMemo(
+    () => sortRows(filteredRows, sort),
+    [filteredRows, sort]
+  );
+
+  function updateFilter(key, value) {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function clearFilters() {
+    setFilters(DEFAULT_FILTERS);
+  }
+
+  function toggleSort(key) {
+    setSort((prev) => {
+      if (prev.key === key) {
+        return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+      }
+      return { key, dir: key === "csr" ? "desc" : "asc" };
+    });
+  }
+
+  async function copySheet() {
+    const text = buildCopyText(sortedRows);
+    if (!text) {
+      setCopyStatus("Nothing to copy");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus("Copied");
+    } catch {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        setCopyStatus("Copied");
+      } catch {
+        setCopyStatus("Copy failed");
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (copyStatus !== "Copy sheet") {
+      const timeout = setTimeout(() => setCopyStatus("Copy sheet"), 1600);
+      return () => clearTimeout(timeout);
+    }
+    return undefined;
+  }, [copyStatus]);
+
+  const activeMeta = active?.updatedAt
+    ? `${active.rows.length} Items \u2022 Last updated ${active.updatedAt.toLocaleTimeString()}`
+    : `${active?.rows.length ?? 0} Items`;
 
   return (
     <div className="app">
-      <nav className="sheet-nav">
-        {SHEETS.map((sheet) => (
-          <a
-            key={sheet.name}
-            href={`#/${encodeURIComponent(sheet.name)}`}
-            className={sheet.name === activeSheet ? "active" : ""}
-          >
-            {sheet.name}
-          </a>
-        ))}
-      </nav>
-
-      <section className="controls">
-        <label className="search">
-          <span>Filter</span>
-          <input
-            type="search"
-            value={filterQuery}
-            onChange={(event) => setFilterQuery(event.target.value)}
-            placeholder="Type to filter rows"
-          />
-        </label>
-        <div className="status">{statusText}</div>
+      <section className="top-bar">
+        <nav className="sheet-nav">
+          {SHEETS.map((sheet) => {
+            const count =
+              sheets.find((entry) => entry.name === sheet.name)?.rows.length ??
+              0;
+            return (
+              <a
+                key={sheet.name}
+                href={`#/${encodeURIComponent(sheet.name)}`}
+                className={sheet.name === activeSheet ? "active" : ""}
+              >
+                {sheet.name} <span>({count || "-"})</span>
+              </a>
+            );
+          })}
+        </nav>
+        <div className={`status ${statusInfo.isReady ? "status--ready" : ""}`}>
+          <span className="status-dot" aria-hidden />
+          <span>{statusInfo.text}</span>
+        </div>
       </section>
 
       <section className="grid">
         {active && (
           <article className={`sheet ${active.status}`} key={active.name}>
-            <header>
-              <div>
-                <h2>{active.name}</h2>
-                <div className="pill">
-                  {active.status === "ready"
-                    ? `${active.rows.length} rows`
-                    : "Loading"}
+            <header className="module-header">
+              <div className="module-title">
+                <div>
+                  <h2>{active.name}</h2>
+                  <p className="module-meta">{activeMeta}</p>
                 </div>
               </div>
-              {active.status === "ready" && (
-                <div className="status">
-                  Updated {new Date().toLocaleTimeString()}
-                </div>
-              )}
+              <div className="module-actions">
+                <button className="btn primary" onClick={copySheet}>
+                  {copyStatus}
+                </button>
+              </div>
             </header>
 
-            {active.status === "loading" && (
-              <div className="loading">Loading data...</div>
-            )}
+            <div className="module-body">
+              {active.status === "loading" && (
+                <div className="loading-panel">
+                  <div className="loading-bar" />
+                  <div className="loading-bar short" />
+                  <div className="loading-table">
+                    <div className="loading-row" />
+                    <div className="loading-row" />
+                    <div className="loading-row" />
+                  </div>
+                </div>
+              )}
 
-            {active.status === "error" && (
-              <div className="error">
-                Unable to load this sheet. Make sure the Google Sheet is
-                published to the web. ({active.error})
-              </div>
-            )}
+              {active.status === "error" && (
+                <div className="error">
+                  Unable to load this sheet. Make sure the Google Sheet is
+                  published to the web. ({active.error})
+                </div>
+              )}
 
-            {active.status === "ready" && (
-              <>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Item</th>
-                        <th>Name</th>
-                        <th>CSR Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRows.map((row) => (
-                        <tr key={`${active.name}-${row.rowNumber}`}>
-                          <td>{row.cells[COL_INDEX.item] || ""}</td>
-                          <td>{row.cells[COL_INDEX.name] || ""}</td>
-                          <td>{row.cells[COL_INDEX.value] || ""}</td>
+              {active.status === "ready" && (
+                <>
+                  <div className="filter-bar">
+                    <label>
+                      Search
+                      <input
+                        type="search"
+                        value={filters.query}
+                        onChange={(event) =>
+                          updateFilter("query", event.target.value)
+                        }
+                        placeholder="Item or player name"
+                      />
+                    </label>
+                    <button className="btn ghost" onClick={clearFilters}>
+                      Clear
+                    </button>
+                  </div>
+
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th
+                            className="col-item"
+                            onClick={() => toggleSort("item")}
+                          >
+                            Item
+                            <span className="sort">
+                              {sort.key === "item"
+                                ? sort.dir === "asc"
+                                  ? " ▲"
+                                  : " ▼"
+                                : ""}
+                            </span>
+                          </th>
+                        <th
+                          className="col-name"
+                          onClick={() => toggleSort("name")}
+                        >
+                          Name
+                            <span className="sort">
+                              {sort.key === "name"
+                                ? sort.dir === "asc"
+                                  ? " ▲"
+                                  : " ▼"
+                                : ""}
+                            </span>
+                          </th>
+                        <th
+                          className="col-csr csr-header"
+                          onClick={() => toggleSort("csr")}
+                        >
+                          <span className="label-full">CSR Value</span>
+                          <span className="label-short">CSR</span>
+                            <span className="sort">
+                              {sort.key === "csr"
+                                ? sort.dir === "asc"
+                                  ? " ▲"
+                                  : " ▼"
+                                : ""}
+                            </span>
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="source">
-                  Source: <a href={active.sourceUrl}>{active.sourceUrl}</a>
-                </div>
-              </>
-            )}
+                      </thead>
+                      <tbody>
+                        {sortedRows.map((row) => {
+                          const tier = csrTier(row.csrNumber);
+                          const rowKey = `${active.name}-${row.rowNumber}-${row.item}-${row.name}`;
+                          return (
+                            <tr key={rowKey}>
+                              <td className="cell-item" title={row.item}>
+                                <a
+                                  className="cell-link"
+                                  href={`https://database.turtlecraft.gg/?search=${encodeURIComponent(
+                                    row.item
+                                  )}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={`Open item in database: ${row.item}`}
+                                >
+                                  <span className="cell-text">{row.item}</span>
+                                </a>
+                              </td>
+                              <td className="cell-name">
+                                <a
+                                  className="cell-link"
+                                  href={`https://turtlecraft.gg/armory/Tel%27Abim/${encodeURIComponent(
+                                    row.name
+                                  )}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={`Open player in armory: ${row.name}`}
+                                >
+                                  {row.name}
+                                </a>
+                              </td>
+                              <td className="cell-csr">
+                                <span className={`csr-badge ${tier.className}`}>
+                                  <strong>{row.value || "-"}</strong>
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="source">
+                    Source: <a href={active.sourceUrl}>{active.sourceUrl}</a>
+                  </div>
+                </>
+              )}
+            </div>
           </article>
         )}
       </section>

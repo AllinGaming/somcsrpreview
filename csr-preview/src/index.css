@@ -1,7 +1,17 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap");
+
+@font-face {
+  font-family: "LifeCraft";
+  src: url("./assets/LifeCraft_Font_0.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  font-family: "Work Sans", "Segoe UI", sans-serif;
-  color: #0b1120;
-  background-color: #eef2f7;
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  color: #0f172a;
+  background-color: #f6f7fb;
 }
 
 * {
@@ -11,9 +21,11 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at 10% 10%, #e0f2fe 0, transparent 45%),
-    radial-gradient(circle at 90% 0%, #ecfeff 0, transparent 45%),
+  background: radial-gradient(circle at 10% 10%, #f1f5f9 0, transparent 45%),
+    radial-gradient(circle at 90% 0%, #eef2f7 0, transparent 45%),
+    radial-gradient(circle at 20% 85%, #e2e8f0 0, transparent 48%),
     linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  overflow-x: hidden;
 }
 
 #root {
