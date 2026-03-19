@@ -1,7 +1,7 @@
 # somcsrpreview
 
 React + Vite site for previewing CSR spreadsheets. https://allingaming.github.io/somcsrpreview
-
+![Preview](https://raw.githubusercontent.com/AllinGaming/somcsrpreview/main/example.png)
 ## Development
 
 ```bash
