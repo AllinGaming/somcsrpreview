@@ -433,6 +433,7 @@ export default function App() {
     return undefined;
   }, [copyStatus]);
 
+
   useEffect(() => {
     if (hideStatusTimeout.current) {
       clearTimeout(hideStatusTimeout.current);
@@ -457,54 +458,55 @@ export default function App() {
 
   return (
     <div className="app">
-      <section className="top-bar">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button">
-              {activeSheet} <span>({activeCount || "-"})</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuLabel>Sheets</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {SHEETS.map((sheet) => {
-              const count =
-                sheets.find((entry) => entry.name === sheet.name)?.rows
-                  .length ?? 0;
-              return (
-                <DropdownMenuItem
-                  key={sheet.name}
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    window.location.hash = `#/${encodeURIComponent(sheet.name)}`;
-                  }}
-                >
-                  {sheet.name} ({count || "-"})
-                </DropdownMenuItem>
-              );
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <div
-          className={`status ${isReady ? "status--ready" : ""} ${
-            statusHidden ? "status--hidden" : ""
-          }`}
-          role="status"
-          aria-label={isReady ? "Synced" : "Syncing"}
-          aria-hidden={statusHidden}
-        >
-          <span className="status-dot" aria-hidden />
-        </div>
-      </section>
+      <div
+        className={`status ${isReady ? "status--ready" : ""} ${
+          statusHidden ? "status--hidden" : ""
+        }`}
+        role="status"
+        aria-label={isReady ? "Synced" : "Syncing"}
+        aria-hidden={statusHidden}
+      >
+        <span className="status-dot" aria-hidden />
+      </div>
 
       <section className="grid">
         {active && (
-          <Card className={`sheet ${active.status}`} key={active.name}>
-            <CardHeader className="module-header">
+          <Card
+            data-size="sm"
+            className={`sheet ${active.status}`}
+            key={active.name}
+          >
+            <CardHeader className="module-header wc-header">
               <div className="module-title">
-                <div>
-                  <CardTitle>{active.name}</CardTitle>
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button">
+                      {activeSheet} <span>({activeCount || "-"})</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuLabel>Sheets</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {SHEETS.map((sheet) => {
+                      const count =
+                        sheets.find((entry) => entry.name === sheet.name)?.rows
+                          .length ?? 0;
+                      return (
+                        <DropdownMenuItem
+                          key={sheet.name}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            window.location.hash = `#/${encodeURIComponent(
+                              sheet.name
+                            )}`;
+                          }}
+                        >
+                          {sheet.name} ({count || "-"})
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
               <div className="module-actions">
                 <div
@@ -627,14 +629,14 @@ export default function App() {
                                       )}`}
                                       target="_blank"
                                       rel="noreferrer"
-                                      title={`Open item in database: ${row.item}`}
+                                      aria-label={`Open item in database: ${row.item}`}
                                     >
                                       <span className="cell-text">
                                         {row.item}
                                       </span>
                                     </a>
                                   </TooltipTrigger>
-                                  <TooltipContent>
+                                  <TooltipContent variant="epic">
                                     <TooltipTitle>{row.item}</TooltipTitle>
                                     <TooltipBody>Open item in database</TooltipBody>
                                   </TooltipContent>
@@ -650,7 +652,7 @@ export default function App() {
                                       )}`}
                                       target="_blank"
                                       rel="noreferrer"
-                                      title={`Open player in armory: ${row.name}`}
+                                      aria-label={`Open player in armory: ${row.name}`}
                                     >
                                       {row.name}
                                     </a>
