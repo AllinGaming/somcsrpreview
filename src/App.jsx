@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/warcraftcn/badge";
 import { Button } from "@/components/ui/warcraftcn/button";
 import {
@@ -480,8 +481,9 @@ export default function App() {
               <div className="module-title">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button type="button">
+                    <Button type="button" className="sheet-trigger">
                       {activeSheet} <span>({activeCount || "-"})</span>
+                      <ChevronDown className="sheet-caret" aria-hidden />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
@@ -529,7 +531,11 @@ export default function App() {
                           className="w-full"
                         />
                       </label>
-                      <Button type="button" onClick={clearFilters}>
+                      <Button
+                        type="button"
+                        onClick={clearFilters}
+                        className="btn-clear"
+                      >
                         Clear
                       </Button>
                     </>

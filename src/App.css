@@ -164,6 +164,17 @@
   font-size: 0.95rem;
 }
 
+.sheet-trigger {
+  gap: 10px;
+  padding-right: 18px;
+}
+
+.sheet-trigger .sheet-caret {
+  width: 16px;
+  height: 16px;
+  opacity: 0.8;
+}
+
 
 .module-actions {
   display: flex;
@@ -214,6 +225,11 @@
 
 .filter-field [data-slot="input"]::placeholder {
   color: rgba(231, 214, 177, 0.7);
+}
+
+.btn-clear {
+  padding: 8px 14px;
+  font-size: 0.85rem;
 }
 
 .table-wrap {
@@ -474,14 +490,14 @@ tbody tr:hover {
 
   .filter-bar {
     display: flex;
-    flex-wrap: nowrap;
-    align-items: center;
+    flex-wrap: wrap;
+    align-items: stretch;
     gap: 8px;
     width: 100%;
   }
 
   .filter-field {
-    flex: 1 1 auto;
+    flex: 1 1 100%;
     align-items: center;
     flex-direction: row;
   }
@@ -509,14 +525,26 @@ tbody tr:hover {
 
   .module-actions {
     width: 100%;
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .module-actions .btn.primary {
+  .module-actions [data-slot="button"] {
     width: 100%;
   }
 
-  .filter-bar--closed .btn.small {
+  .module-title [data-slot="button"],
+  .module-actions [data-slot="button"] {
     width: 100%;
+  }
+
+  .filter-bar--closed [data-slot="button"] {
+    width: 100%;
+  }
+
+  .btn-clear {
+    width: auto;
+    align-self: flex-start;
   }
 
   .table-wrap {
